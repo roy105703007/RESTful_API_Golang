@@ -46,9 +46,30 @@ func main() {
 	// url为 /welcome?firstname=Jane&lastname=Doe
 	router.GET("/file/*path", func(c *gin.Context) {
 		path := c.Param("path")
+		filter := c.DefaultQuery("filterByName", "")
+		if IsFile(path) {
+			byteFile, err := ioutil.ReadFile(path)
+			if err != nil {
+				fmt.Println(err)
+			}
+			fileNameInPath := ""
+			for i := range path {
+				if path[i] == 47 { // path[i] == "/"
+					fileNameInPath = path[i+1:]
+				}
+			}
+			if len(byteFile) == 0 || !strings.Contains(fileNameInPath, filter) {
+				c.JSON(404, gin.H{
+					"message": "HTTP code not found",
+				})
+				return
+			}
+			c.Data(http.StatusOK, "application/octet-stream", byteFile)
+			return
+		}
+
 		orderBy_input := c.DefaultQuery("orderBy", "Undefined")
 		orderDirection := c.DefaultQuery("orderByDirection", "Undefined")
-		filter := c.DefaultQuery("filterByName", "")
 		orderBy := Undefined
 		if orderBy_input == "lastModified" {
 			orderBy = LastModified
