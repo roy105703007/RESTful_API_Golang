@@ -22,17 +22,13 @@ type IndexData struct {
 }
 
 type FileInfo interface {
-	Name() string // base name of the file
-	Size() int64  // length in bytes for regular files; system-dependent for others
-	//Mode() FileMode     // file mode bits
+	Name() string       // base name of the file
+	Size() int64        // length in bytes for regular files; system-dependent for others
 	ModTime() time.Time // modification time
 	IsDir() bool        // abbreviation for Mode().IsDir()
 	Sys() interface{}   // underlying data source (can return nil)
 }
 
-type FileData struct {
-	Filedata string `json: "filedata"`
-}
 type Order int64
 
 const (
@@ -48,24 +44,24 @@ func main() {
 
 	// 注册路由和Handler
 	// url为 /welcome?firstname=Jane&lastname=Doe
-	router.GET("/file", func(c *gin.Context) {
+	router.GET("/file/*path", func(c *gin.Context) {
+		path := c.Param("path")
 		orderBy_input := c.DefaultQuery("orderBy", "Undefined")
 		orderDirection := c.DefaultQuery("orderByDirection", "Undefined")
 		filter := c.DefaultQuery("filterByName", "")
 		orderBy := Undefined
-		if orderBy_input == "LastModified" {
+		if orderBy_input == "lastModified" {
 			orderBy = LastModified
-		} else if orderBy_input == "Size" {
+		} else if orderBy_input == "size" {
 			orderBy = Size
-		} else if orderBy_input == "FileName" {
+		} else if orderBy_input == "fileName" {
 			orderBy = FileName
 		} else {
 			orderBy = Undefined
 		}
+		fmt.Println(orderBy, orderDirection, filter)
 		var files []string
-		files = getAllFile(orderBy, orderDirection, filter)
-		//delFile(filename)
-		//c.String(http.StatusOK, "Hello %s %s", filename)
+		files = getAllFile(path, orderBy, orderDirection, filter)
 		if len(files) == 0 {
 			c.JSON(404, gin.H{
 				"message": "HTTP code not found",
@@ -142,6 +138,10 @@ func main() {
 	router.DELETE("/file/*path", func(c *gin.Context) {
 		fmt.Println(c.FullPath())
 		path := c.Param("path")
+		if IsDir(path) {
+			c.String(http.StatusBadRequest, fmt.Sprintf("path is directory."))
+			return
+		}
 		delSuccess := delFile(path)
 		if delSuccess {
 			c.JSON(200, gin.H{
@@ -170,8 +170,8 @@ func delFile(fileName string) bool {
 	return true
 }
 
-func getAllFile(orderBy Order, orderDirection string, filter string) []string {
-	myfolder := "./"
+func getAllFile(path string, orderBy Order, orderDirection string, filter string) []string {
+	myfolder := path
 	var all []string
 	files, _ := ioutil.ReadDir(myfolder)
 	switch orderBy {
@@ -218,4 +218,16 @@ func getAllFile(orderBy Order, orderDirection string, filter string) []string {
 		// }
 	}
 	return all
+}
+
+func IsDir(path string) bool {
+	s, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return s.IsDir()
+}
+
+func IsFile(path string) bool {
+	return !IsDir(path)
 }
