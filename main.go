@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -28,6 +30,9 @@ type FileInfo interface {
 	Sys() interface{}   // underlying data source (can return nil)
 }
 
+type FileData struct {
+	Filedata string `json: "filedata"`
+}
 type Order int64
 
 const (
@@ -39,6 +44,7 @@ const (
 
 func main() {
 	router := gin.Default()
+	router.MaxMultipartMemory = 8 << 20 // 8 MiB
 
 	// 注册路由和Handler
 	// url为 /welcome?firstname=Jane&lastname=Doe
@@ -71,25 +77,97 @@ func main() {
 		})
 	})
 
+	router.POST("/file/*path", func(c *gin.Context) {
+		file, err := c.FormFile("file")
+
+		// 上傳檔案失敗時的錯誤處理
+		if err != nil {
+			c.String(http.StatusBadRequest, fmt.Sprintf("get form err: %s", err.Error()))
+		}
+		log.Println("file.Filename", file.Filename)
+		if file == nil {
+			fmt.Println("file", file)
+			return
+		}
+		filename := filepath.Base(file.Filename)
+		log.Println("filename", filename)
+
+		// 將檔案上傳到特定位置，這裏上傳的檔案會放到 public 資料夾中
+		path := c.Param("path")
+		// 檢查檔案是否存在
+		if _, err := os.Stat(path + "/" + filename); !os.IsNotExist(err) {
+			c.String(http.StatusBadRequest, fmt.Sprintf("file is exist"))
+			return
+		}
+		if err := c.SaveUploadedFile(file, path+"/"+filename); err != nil {
+			// 存檔失敗時的錯誤處理
+			c.String(http.StatusBadRequest, fmt.Sprintf("upload file err: %s", err.Error()))
+			return
+		}
+
+		c.String(http.StatusOK, fmt.Sprintf("File %s uploaded successfully.", file.Filename))
+	})
+
+	router.PATCH("/file/*path", func(c *gin.Context) {
+		file, err := c.FormFile("file")
+
+		// 上傳檔案失敗時的錯誤處理
+		if err != nil {
+			c.String(http.StatusBadRequest, fmt.Sprintf("get form err: %s", err.Error()))
+		}
+		log.Println("file.Filename", file.Filename)
+		if file == nil {
+			fmt.Println("file", file)
+			return
+		}
+		filename := filepath.Base(file.Filename)
+		log.Println("filename", filename)
+
+		// 將檔案上傳到特定位置，這裏上傳的檔案會放到 public 資料夾中
+		path := c.Param("path")
+		// 檢查檔案是否存在
+		if _, err := os.Stat(path + "/" + filename); os.IsNotExist(err) {
+			c.String(http.StatusBadRequest, fmt.Sprintf("file is not exist"))
+			return
+		}
+		if err := c.SaveUploadedFile(file, path+"/"+filename); err != nil {
+			// 存檔失敗時的錯誤處理
+			c.String(http.StatusBadRequest, fmt.Sprintf("upload file err: %s", err.Error()))
+			return
+		}
+
+		c.String(http.StatusOK, fmt.Sprintf("File %s uploaded successfully.", file.Filename))
+	})
+
+	router.DELETE("/file/*path", func(c *gin.Context) {
+		fmt.Println(c.FullPath())
+		path := c.Param("path")
+		delSuccess := delFile(path)
+		if delSuccess {
+			c.JSON(200, gin.H{
+				"delFileSuccess": true,
+				"files":          path,
+			})
+		} else {
+			c.JSON(200, gin.H{
+				"delFileSuccess": false,
+				"files":          path,
+			})
+		}
+	})
+
 	router.Run(":8080")
 }
 
-func newFile(fileName string) {
-	f, err := os.Create(fileName)
-	defer f.Close()
-	if err != nil {
-		fmt.Println(err.Error())
-	} else {
-		_, err = f.Write([]byte("要寫入的文本內容"))
-		fmt.Print(err)
+func delFile(fileName string) bool {
+	if _, err := os.Stat(fileName); os.IsNotExist(err) {
+		return false
 	}
-}
-
-func delFile(fileName string) {
 	e := os.Remove(fileName)
 	if e != nil {
 		log.Fatal(e)
 	}
+	return true
 }
 
 func getAllFile(orderBy Order, orderDirection string, filter string) []string {
