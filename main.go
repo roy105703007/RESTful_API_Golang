@@ -39,11 +39,13 @@ const (
 )
 
 func main() {
+	router := setupRouter()
+	router.Run(":8080")
+}
+
+func setupRouter() *gin.Engine {
 	router := gin.Default()
 	router.MaxMultipartMemory = 8 << 20 // 8 MiB
-
-	// 注册路由和Handler
-	// url为 /welcome?firstname=Jane&lastname=Doe
 	router.GET("/file/*path", func(c *gin.Context) {
 		path := c.Param("path")
 		filter := c.DefaultQuery("filterByName", "")
@@ -59,7 +61,7 @@ func main() {
 				}
 			}
 			if len(byteFile) == 0 || !strings.Contains(fileNameInPath, filter) {
-				c.JSON(404, gin.H{
+				c.JSON(http.StatusBadRequest, gin.H{
 					"message": "HTTP code not found",
 				})
 				return
@@ -84,11 +86,11 @@ func main() {
 		var files []string
 		files = getAllFile(path, orderBy, orderDirection, filter)
 		if len(files) == 0 {
-			c.JSON(404, gin.H{
+			c.JSON(http.StatusBadRequest, gin.H{
 				"message": "HTTP code not found",
 			})
 		}
-		c.JSON(200, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"isDirectory": true,
 			"files":       files,
 		})
@@ -109,13 +111,13 @@ func main() {
 		filename := filepath.Base(file.Filename)
 		log.Println("filename", filename)
 
-		// 將檔案上傳到特定位置，這裏上傳的檔案會放到 public 資料夾中
 		path := c.Param("path")
 		// 檢查檔案是否存在
 		if _, err := os.Stat(path + "/" + filename); !os.IsNotExist(err) {
 			c.String(http.StatusBadRequest, fmt.Sprintf("file is exist"))
 			return
 		}
+		//存檔
 		if err := c.SaveUploadedFile(file, path+"/"+filename); err != nil {
 			// 存檔失敗時的錯誤處理
 			c.String(http.StatusBadRequest, fmt.Sprintf("upload file err: %s", err.Error()))
@@ -176,8 +178,7 @@ func main() {
 			})
 		}
 	})
-
-	router.Run(":8080")
+	return router
 }
 
 func delFile(fileName string) bool {
