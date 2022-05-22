@@ -166,13 +166,13 @@ func main() {
 		delSuccess := delFile(path)
 		if delSuccess {
 			c.JSON(200, gin.H{
-				"delFileSuccess": true,
-				"files":          path,
+				"status":  true,
+				"message": path,
 			})
 		} else {
 			c.JSON(200, gin.H{
-				"delFileSuccess": false,
-				"files":          path,
+				"status":  false,
+				"message": "file is not exist",
 			})
 		}
 	})
